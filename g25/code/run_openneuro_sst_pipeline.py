@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import json
 import os
 import re
 import shutil
 import ssl
+import struct
 import subprocess
 import sys
 import tempfile
@@ -203,17 +205,37 @@ def select_subject_files(
     return selected
 
 
+def is_valid_nifti_gz(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        with gzip.open(path, "rb") as src:
+            header = src.read(352)
+    except OSError:
+        return False
+    if len(header) < 352:
+        return False
+    sizeof_hdr_le = struct.unpack("<I", header[:4])[0]
+    sizeof_hdr_be = struct.unpack(">I", header[:4])[0]
+    return sizeof_hdr_le == 348 or sizeof_hdr_be == 348
+
+
 def download_rows(rows: list[dict], destination_dir: Path) -> list[Path]:
     destination_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[Path] = []
     for row in rows:
         target = destination_dir / row["filename"]
+        if target.name.endswith(".nii.gz") and target.exists() and not is_valid_nifti_gz(target):
+            log(f"Cached file is not a valid NIfTI, deleting and redownloading: {target.name}")
+            target.unlink()
         if target.exists() and target.stat().st_size > 0:
             downloaded.append(target)
             continue
         log(f"Downloading {target.name}")
         with urllib.request.urlopen(row["urls"][0], context=ssl._create_unverified_context()) as resp:
             target.write_bytes(resp.read())
+        if target.name.endswith(".nii.gz") and not is_valid_nifti_gz(target):
+            raise RuntimeError(f"Downloaded file is not a valid gzipped NIfTI: {target}")
         downloaded.append(target)
     return downloaded
 
