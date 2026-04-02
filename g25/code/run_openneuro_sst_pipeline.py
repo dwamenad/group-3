@@ -59,6 +59,38 @@ def run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None =
     return result
 
 
+def update_env_from_env0(env_dump: bytes) -> None:
+    for entry in env_dump.split(b"\0"):
+        if not entry or b"=" not in entry:
+            continue
+        key, value = entry.split(b"=", 1)
+        os.environ[key.decode(errors="ignore")] = value.decode(errors="ignore")
+
+
+def ensure_fsl_on_path() -> tuple[bool, str | None]:
+    required_tools = ("feat", "mcflirt", "fslnvols")
+    if all(shutil.which(tool) for tool in required_tools):
+        return True, "already-on-path"
+
+    attempts = [
+        ("ml fsl", "type ml >/dev/null 2>&1 && ml fsl"),
+        ("module load fsl", "type module >/dev/null 2>&1 && module load fsl"),
+    ]
+    for label, shell_cmd in attempts:
+        result = subprocess.run(
+            ["bash", "-lc", f"{shell_cmd} >/dev/null 2>&1 && env -0"],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout:
+            continue
+        update_env_from_env0(result.stdout)
+        if all(shutil.which(tool) for tool in required_tools):
+            return True, label
+
+    return False, None
+
+
 def gql(query: str) -> dict:
     payload = json.dumps({"query": query}).encode("utf-8")
     req = urllib.request.Request(
@@ -284,11 +316,17 @@ def run_sst_firstlevel(
     force: bool,
 ) -> list[dict]:
     summary: list[dict] = []
+    fsl_ready, fsl_load_method = ensure_fsl_on_path()
+    if fsl_load_method and fsl_load_method != "already-on-path":
+        log(f"Loaded FSL environment with `{fsl_load_method}`")
     feat_bin = shutil.which("feat")
     mcflirt_bin = shutil.which("mcflirt")
     fslnvols_bin = shutil.which("fslnvols")
-    if not all([feat_bin, mcflirt_bin, fslnvols_bin]):
-        raise EnvironmentError("FSL commands feat, mcflirt, and fslnvols must be on PATH")
+    if not fsl_ready or not all([feat_bin, mcflirt_bin, fslnvols_bin]):
+        raise EnvironmentError(
+            "FSL commands feat, mcflirt, and fslnvols must be on PATH. "
+            "In Neurodesk, load FSL with `ml fsl` or `module load fsl` before rerunning if auto-load does not succeed."
+        )
 
     deriv_root = runtime_project / "derivatives" / "fsl"
     conf_root = deriv_root / "confounds_openneuro" / subject

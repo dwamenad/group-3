@@ -27,6 +27,11 @@ cd group-3/g25/output/jupyter-notebook
 jupyter lab g25-part-a-datalad-confounds-evs-feat-mricrogl.ipynb
 ```
 
+FSL note:
+
+- In Neurodesk, the notebook now tries to load FSL automatically with `ml fsl` and then `module load fsl` before it checks for `mcflirt` and `feat`.
+- If the auto-load still fails, run `ml fsl` manually in the terminal before launching Jupyter.
+
 What the notebook does:
 
 - downloads required SST files directly from OpenNeuro
