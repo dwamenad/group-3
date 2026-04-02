@@ -12,6 +12,7 @@ tools/
 
 # Notebook runtime artifacts
 output/jupyter-notebook/_cache/
+output/jupyter-notebook/_runtime/
 output/jupyter-notebook/feat-demo/
 output/jupyter-notebook/figures/
 output/jupyter-notebook/threecol-demo/

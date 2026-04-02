@@ -123,7 +123,12 @@ def project_root_from_script() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def ensure_runtime_link(project_root: Path) -> Path:
+def choose_runtime_paths(project_root: Path) -> tuple[Path, Path, str]:
+    if " " not in str(project_root):
+        runtime_root = project_root / "output" / "jupyter-notebook" / "_runtime"
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        return runtime_root, project_root, "project-local"
+
     runtime_root = Path(tempfile.gettempdir()) / f"{project_root.name}_openneuro_runtime"
     runtime_root.mkdir(parents=True, exist_ok=True)
     runtime_project = runtime_root / project_root.name
@@ -132,7 +137,7 @@ def ensure_runtime_link(project_root: Path) -> Path:
             runtime_project.unlink()
     if not runtime_project.exists():
         runtime_project.symlink_to(project_root, target_is_directory=True)
-    return runtime_project
+    return runtime_root, runtime_project, "tmp-symlink"
 
 
 def ensure_bidsutils(project_root: Path) -> Path:
@@ -310,6 +315,7 @@ def apply_registration_fix(feat_dir: Path, feat_bin: Path) -> None:
 
 def run_sst_firstlevel(
     project_root: Path,
+    runtime_root: Path,
     runtime_project: Path,
     subject: str,
     runs: list[int],
@@ -334,7 +340,7 @@ def run_sst_firstlevel(
     ev_dir = deriv_root / "EVfiles" / subject / "SST"
     project_feat_root = project_root / "derivatives" / "fsl" / subject
     project_feat_root.mkdir(parents=True, exist_ok=True)
-    feat_runtime_root = Path(tempfile.gettempdir()) / f"{project_root.name}_feat_runtime" / subject
+    feat_runtime_root = runtime_root / "feat" / subject
     feat_runtime_root.mkdir(parents=True, exist_ok=True)
 
     for run_id in runs:
@@ -423,7 +429,9 @@ def main() -> int:
         raise ValueError(f"Subjects must include the 'sub-' prefix: {invalid}")
 
     project_root = project_root_from_script()
-    runtime_project = ensure_runtime_link(project_root)
+    runtime_root, runtime_project, runtime_mode = choose_runtime_paths(project_root)
+    log(f"Runtime mode: {runtime_mode}")
+    log(f"Runtime root: {runtime_root}")
     root_rows = snapshot_files()
     ensure_root_metadata(project_root, root_rows)
     subject_keys = subject_tree_keys(root_rows, subjects) if not args.skip_download else {}
@@ -459,7 +467,7 @@ def main() -> int:
             generate_sst_evs(project_root, converter, subject, args.runs)
 
         if not args.skip_feat:
-            summary_rows.extend(run_sst_firstlevel(project_root, runtime_project, subject, args.runs, args.force))
+            summary_rows.extend(run_sst_firstlevel(project_root, runtime_root, runtime_project, subject, args.runs, args.force))
 
     summary_path = project_root / "output" / "openneuro_sst_firstlevel_summary.tsv"
     fieldnames = ["subject", "run", "status", "model", "feat_dir", "confounds_tsv", "fd_plot"]
