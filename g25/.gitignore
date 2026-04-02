@@ -1,0 +1,29 @@
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+
+# Downloaded imaging data
+bids/**/*.nii
+bids/**/*.nii.gz
+
+# Generated analysis outputs
+derivatives/
+tools/
+
+# Notebook runtime artifacts
+output/jupyter-notebook/_cache/
+output/jupyter-notebook/feat-demo/
+output/jupyter-notebook/figures/
+output/jupyter-notebook/threecol-demo/
+output/jupyter-notebook/*.csv
+output/jupyter-notebook/*.tsv
+output/jupyter-notebook/*.png
+output/jupyter-notebook/*.html
+output/jupyter-notebook/*.nii
+output/jupyter-notebook/*.nii.gz
+
+# Keep the teaching notebook and vendored converter
+!output/jupyter-notebook/g25-part-a-datalad-confounds-evs-feat-mricrogl.ipynb
+!output/jupyter-notebook/_vendor/
+!output/jupyter-notebook/_vendor/bidsutils/
+!output/jupyter-notebook/_vendor/bidsutils/**
