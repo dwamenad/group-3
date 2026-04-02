@@ -211,6 +211,8 @@ def is_valid_nifti_gz(path: Path) -> bool:
     try:
         with gzip.open(path, "rb") as src:
             header = src.read(352)
+            for chunk in iter(lambda: src.read(1024 * 1024), b""):
+                pass
     except OSError:
         return False
     if len(header) < 352:
@@ -218,6 +220,29 @@ def is_valid_nifti_gz(path: Path) -> bool:
     sizeof_hdr_le = struct.unpack("<I", header[:4])[0]
     sizeof_hdr_be = struct.unpack(">I", header[:4])[0]
     return sizeof_hdr_le == 348 or sizeof_hdr_be == 348
+
+
+def ensure_uncompressed_nifti(source_path: Path, destination_path: Path) -> Path:
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    if destination_path.exists() and destination_path.stat().st_size > 0:
+        if destination_path.stat().st_mtime >= source_path.stat().st_mtime:
+            return destination_path
+        destination_path.unlink()
+
+    tmp_path = destination_path.with_name(destination_path.name + ".tmp")
+    if tmp_path.exists():
+        tmp_path.unlink()
+
+    if source_path.name.endswith(".nii.gz"):
+        with gzip.open(source_path, "rb") as src, tmp_path.open("wb") as dst:
+            shutil.copyfileobj(src, dst)
+    else:
+        shutil.copy2(source_path, tmp_path)
+
+    if not tmp_path.exists() or tmp_path.stat().st_size == 0:
+        raise RuntimeError(f"Failed to materialize runtime NIfTI for {source_path}")
+    os.replace(tmp_path, destination_path)
+    return destination_path
 
 
 def download_rows(rows: list[dict], destination_dir: Path) -> list[Path]:
@@ -367,11 +392,19 @@ def run_sst_firstlevel(
 
     for run_id in runs:
         func_dir = runtime_project / "bids" / subject / "func"
-        bold = func_dir / f"{subject}_task-SST_run-{run_id}_echo-1_part-mag_bold.nii.gz"
+        bold_gz = func_dir / f"{subject}_task-SST_run-{run_id}_echo-1_part-mag_bold.nii.gz"
         events = func_dir / f"{subject}_task-SST_run-{run_id}_events.tsv"
-        if not bold.exists() or not events.exists():
+        if not bold_gz.exists() or not events.exists():
             summary.append({"subject": subject, "run": run_id, "status": "skip-missing-inputs"})
             continue
+        if not is_valid_nifti_gz(bold_gz):
+            summary.append({"subject": subject, "run": run_id, "status": "skip-invalid-bold"})
+            continue
+
+        bold = ensure_uncompressed_nifti(
+            bold_gz,
+            feat_runtime_root / f"{subject}_task-SST_run-{run_id}_echo-1_part-mag_bold.nii",
+        )
 
         mcf_base = conf_root / f"{subject}_task-SST_run-{run_id}_mcf"
         fd_metric = conf_root / f"{subject}_task-SST_run-{run_id}_fd-metric.txt"
