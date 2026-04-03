@@ -2,7 +2,7 @@
 
 Canonical notebook:
 
-- `g25/output/jupyter-notebook/g25-part-a-datalad-confounds-evs-feat-mricrogl.ipynb`
+- `g25/output/jupyter-notebook/g25-part-a-AdView-datalad-confounds-evs-feat-mricrogl.ipynb`
 
 Repository layout:
 
@@ -24,7 +24,7 @@ cd group-3/g25/output/jupyter-notebook
 4. Start JupyterLab:
 
 ```bash
-jupyter lab g25-part-a-datalad-confounds-evs-feat-mricrogl.ipynb
+jupyter lab g25-part-a-AdView-datalad-confounds-evs-feat-mricrogl.ipynb
 ```
 
 FSL note:
